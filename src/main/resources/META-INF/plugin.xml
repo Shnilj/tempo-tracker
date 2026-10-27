@@ -1,0 +1,58 @@
+<idea-plugin>
+    <id>be.jensdescamps.tempotracker</id>
+    <name>Tempo Branch Tracker</name>
+    <vendor>Jens Descamps</vendor>
+
+    <description><![CDATA[
+    Tracks active IDE time per Jira ticket, based on the checked-out Git branch
+    (e.g. <code>feature/ABC-123-some-thing</code> logs on <code>ABC-123</code>),
+    rounds it up to the next quarter hour and submits it to Tempo (Jira Cloud),
+    either after review in the Tempo Tracker tool window or automatically every day.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable parentId="tools"
+                                 id="be.jensdescamps.tempotracker.settings"
+                                 displayName="Tempo Tracker"
+                                 instance="be.jensdescamps.tempotracker.settings.TempoConfigurable"/>
+
+        <toolWindow id="Tempo Tracker"
+                    anchor="right"
+                    icon="AllIcons.Vcs.History"
+                    factoryClass="be.jensdescamps.tempotracker.ui.TempoToolWindowFactory"/>
+
+        <statusBarWidgetFactory id="TempoTrackerStatus"
+                                implementation="be.jensdescamps.tempotracker.ui.TrackerStatusWidgetFactory"/>
+
+        <postStartupActivity implementation="be.jensdescamps.tempotracker.core.TrackerStartupActivity"/>
+
+        <notificationGroup id="Tempo Tracker" displayType="BALLOON"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener class="be.jensdescamps.tempotracker.core.TrackerActivationListener"
+                  topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+    </applicationListeners>
+
+    <projectListeners>
+        <listener class="be.jensdescamps.tempotracker.core.BranchChangeListener"
+                  topic="git4idea.repo.GitRepositoryChangeListener"/>
+    </projectListeners>
+
+    <actions>
+        <group id="TempoTracker.ToolsGroup" text="Tempo Tracker" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="TempoTracker.TogglePause"
+                    class="be.jensdescamps.tempotracker.actions.TogglePauseAction"
+                    text="Pause Time Tracking"
+                    description="Pause or resume Tempo time tracking"/>
+            <action id="TempoTracker.AssignTicket"
+                    class="be.jensdescamps.tempotracker.actions.AssignTicketAction"
+                    text="Assign Jira Ticket to Current Branch…"
+                    description="Track time on a specific ticket for a branch whose name has no ticket key"/>
+        </group>
+    </actions>
+</idea-plugin>

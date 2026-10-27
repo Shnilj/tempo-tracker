@@ -24,6 +24,9 @@ dependencies {
     intellijPlatform {
         intellijIdea("2026.2.2")
         bundledPlugin("Git4Idea")
+        // Since 2026.x the shared DVCS classes (Repository, AbstractRepositoryManager) live in their own modules.
+        bundledModule("intellij.platform.vcs.dvcs")
+        bundledModule("intellij.platform.vcs.dvcs.impl")
         testFramework(TestFrameworkType.Platform)
     }
     testImplementation("junit:junit:4.13.2")

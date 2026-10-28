@@ -17,6 +17,15 @@ enum class SubmitMode(private val label: String) {
     override fun toString() = label
 }
 
+/** How a day's worklogs are placed in Tempo. */
+enum class Layout(private val label: String) {
+    OWN_START("Each ticket at its first activity of the day (one worklog per ticket)"),
+    BACK_TO_BACK("Back to back from the start of your day (one worklog per ticket)"),
+    TIMELINE("Real timeline: a worklog per work session");
+
+    override fun toString() = label
+}
+
 @Service(Service.Level.APP)
 @State(name = "TempoTrackerSettings", storages = [Storage("tempo-tracker.xml")])
 class TempoSettings : PersistentStateComponent<TempoSettings.State> {
@@ -38,6 +47,8 @@ class TempoSettings : PersistentStateComponent<TempoSettings.State> {
         var descriptionTemplate: String = "Working on issue {key}"
         /** Place a day's worklogs one after another instead of each at its own first activity. */
         var backToBack: Boolean = false
+        /** Layout name; empty = derived from [backToBack] (settings from before layouts existed). */
+        var layout: String = ""
         var rituals: MutableList<Ritual> = mutableListOf()
     }
 

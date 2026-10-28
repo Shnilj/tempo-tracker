@@ -23,6 +23,13 @@ IntelliJ plugin that tracks **active IDE time per Jira ticket**, based on the ch
 - **Two modes** (Settings → Tools → Tempo Tracker):
   - *Review and submit myself.* At the daily time (17:00 by default) you get a reminder if something isn't logged yet.
   - *Submit automatically.* At the daily time, today and the last 7 days are synced. Leftovers from previous days are also synced when the IDE starts.
+- **Worklog layouts.** Set in Settings → Tools → Tempo Tracker → Worklogs:
+  - *First activity:* one worklog per ticket, starting when you first worked on it.
+  - *Back to back:* one worklog per ticket, chained from your first activity.
+  - *Real timeline:* every quarter hour goes to the ticket you spent most of it on, and neighbouring quarters of the same ticket form one worklog. So 10:00–11:03 on ABC-01, then support until 12:00, then ABC-01 from 13:00 to 15:00 gives ABC-01 10:00–11:00 and 13:00–15:00, plus support 11:00–12:00. Other rules:
+    - Detours shorter than half a quarter hour are absorbed.
+    - Idle gaps up to 15 minutes within the same ticket are filled.
+    - Manually added time and edited durations go into the first free slots.
 - **Rituals.** Recurring meetings such as a standup, retro or planning, set up in Settings → Tools → Tempo Tracker → Rituals. Each has a name, ticket, days (`Mon,Wed-Fri`, `ma,wo,do,vr`), start time and duration.
   - They're added as fixed-time rows only on days you've worked in IntelliJ, so days off stay empty.
   - IDE time isn't counted while a ritual is running.

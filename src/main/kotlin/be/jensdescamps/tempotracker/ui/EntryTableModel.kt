@@ -50,7 +50,10 @@ class EntryTableModel : AbstractTableModel() {
             TICKET -> e.ticket.ifBlank { NO_TICKET }
             SUMMARY -> e.summary
             TRACKED -> if (e.ritualId.isNotEmpty()) "meeting" else Durations.format(e.trackedSeconds)
-            TO_LOG -> Durations.format(LogPolicy.secondsToLog(e.copy(excluded = false), settings)) +
+            TO_LOG -> Durations.format(
+                if (LogPolicy.usesTimeline(e, settings) && !e.excluded) LogPolicy.plannedSeconds(e, settings, plan[e.id])
+                else LogPolicy.secondsToLog(e.copy(excluded = false), settings),
+            ) +
                 if (e.overrideSeconds >= 0) " ✎" else ""
             TIME -> timeRange(e)
             DESCRIPTION -> if (e.ticket.isBlank()) "" else LogPolicy.description(e, settings)
@@ -88,7 +91,7 @@ class EntryTableModel : AbstractTableModel() {
 
     /** "08:30–09:30, 09:45–10:15" for entries that will be logged. */
     private fun timeRange(e: TimeEntry): String =
-        if (LogPolicy.secondsToLog(e, settings) <= 0) "" else LogPolicy.timeRange(plan[e.id])
+        if (LogPolicy.plannedSeconds(e, settings, plan[e.id]) <= 0) "" else LogPolicy.timeRange(plan[e.id])
 
     fun applyColumnWidths(table: JTable) {
         val widths = intArrayOf(36, 140, 220, 70, 80, 100, 220, 130)

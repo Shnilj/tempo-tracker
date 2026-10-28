@@ -39,6 +39,7 @@ class TempoConfigurable : BoundConfigurable("Tempo Tracker") {
     private var jiraToken = ""
     private var tempoToken = ""
     private var mode: SubmitMode? = settings.mode
+    private var layout: Layout? = null
 
     private lateinit var urlField: JBTextField
     private lateinit var emailField: JBTextField
@@ -56,6 +57,7 @@ class TempoConfigurable : BoundConfigurable("Tempo Tracker") {
         jiraToken = TempoSecrets.jiraToken
         tempoToken = TempoSecrets.tempoToken
         mode = settings.mode
+        layout = be.jensdescamps.tempotracker.core.LogPolicy.layoutOf(s)
         ritualModel.setItems(s.rituals)
 
         return panel {
@@ -121,10 +123,15 @@ class TempoConfigurable : BoundConfigurable("Tempo Tracker") {
                     textField().bindText(s::descriptionTemplate).columns(COLUMNS_LARGE)
                         .comment("Placeholders: {key}, {summary}")
                 }
-                row {
-                    checkBox("Place each day's worklogs back to back").bindSelected(s::backToBack)
-                        .comment("The day starts at your first activity (rounded), then each ticket follows the previous one, " +
-                            "in the order you first worked on them. Off: each worklog starts at your first activity on that ticket.")
+                row("Worklogs:") {
+                    comboBox(Layout.entries).bindItem(::layout)
+                        .comment(
+                            "First activity: one worklog per ticket, starting when you first worked on it. " +
+                                "Back to back: one worklog per ticket, chained from your first activity. " +
+                                "Real timeline: each quarter hour goes to the ticket you spent most of it on, " +
+                                "so interrupted work becomes several worklogs (e.g. 10:00–11:00 and 13:00–15:00). " +
+                                "All layouts keep rituals at their fixed time.",
+                        )
                 }
                 row("Submitting:") {
                     comboBox(SubmitMode.entries).bindItem(::mode)
@@ -156,7 +163,9 @@ class TempoConfigurable : BoundConfigurable("Tempo Tracker") {
         }
     }
 
-    override fun isModified(): Boolean = super.isModified() || ritualModel.items != s.rituals
+    override fun isModified(): Boolean =
+        super.isModified() || ritualModel.items != s.rituals ||
+            (layout ?: Layout.OWN_START) != be.jensdescamps.tempotracker.core.LogPolicy.layoutOf(s)
 
     override fun reset() {
         super.reset()
@@ -171,6 +180,9 @@ class TempoConfigurable : BoundConfigurable("Tempo Tracker") {
         val today = LocalDate.now()
         if (TimeStore.getInstance().hasActivity(today)) TimeStore.getInstance().ensureRituals(today, s.rituals)
         s.submitMode = (mode ?: SubmitMode.MANUAL).name
+        val chosen = layout ?: Layout.OWN_START
+        s.layout = chosen.name
+        s.backToBack = chosen == Layout.BACK_TO_BACK
         TempoSecrets.jiraToken = jiraToken
         TempoSecrets.tempoToken = tempoToken
         JiraService.getInstance().clearCache()

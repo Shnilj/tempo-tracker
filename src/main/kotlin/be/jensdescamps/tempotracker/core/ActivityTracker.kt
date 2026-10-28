@@ -124,8 +124,8 @@ class ActivityTracker : Disposable {
             val key = previous.ticket ?: if (settings.trackUnassigned) "" else null
             if (key != null) {
                 val seconds = (elapsedMs + 500) / 1000
-                val start = LocalTime.now().minusSeconds(seconds).format(TIME_FORMAT)
-                store.credit(today, key, seconds, start)
+                val end = LocalTime.now()
+                store.credit(today, key, seconds, end.minusSeconds(seconds).format(TIME_FORMAT), end.format(TIME_FORMAT))
                 store.ensureRituals(today, settings.rituals) // only on days you actually work
             }
         }

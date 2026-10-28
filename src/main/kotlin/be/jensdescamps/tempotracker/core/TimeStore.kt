@@ -75,11 +75,13 @@ class TimeStore : PersistentStateComponent<TimeStore.State> {
 
     // ---- writes ----
 
-    fun credit(date: LocalDate, ticket: String, seconds: Long, startTime: String) = write {
+    /** Adds [seconds] of work that ended at [endTime] (HH:mm:ss) and started at [startTime]. */
+    fun credit(date: LocalDate, ticket: String, seconds: Long, startTime: String, endTime: String) = write {
         val d = date.toString()
         val entry = data.entries.firstOrNull { it.date == d && it.ticket == ticket && it.ritualId.isEmpty() }
             ?: TimeEntry(date = d, ticket = ticket, startTime = startTime).also { data.entries.add(it) }
         entry.trackedSeconds += seconds
+        entry.sessions = Sessions.extend(entry.sessions, startTime, endTime)
     }
 
     /** Adds manually entered time; merges into an existing entry for the same ticket and day. */
@@ -184,5 +186,39 @@ class TimeStore : PersistentStateComponent<TimeStore.State> {
 
     companion object {
         fun getInstance(): TimeStore = service()
+    }
+}
+
+/** Work sessions stored as "HH:mm:ss-HH:mm:ss;…". */
+object Sessions {
+    /** Gaps up to this long (a missed tick, a short detour) continue the previous session. */
+    private const val CONTINUE_SECONDS = 120
+
+    fun parse(text: String): List<Pair<Long, Long>> = text.split(';').mapNotNull { part ->
+        val bounds = part.split('-')
+        if (bounds.size != 2) return@mapNotNull null
+        val from = runCatching { java.time.LocalTime.parse(bounds[0].trim()).toSecondOfDay().toLong() }.getOrNull()
+        val to = runCatching { java.time.LocalTime.parse(bounds[1].trim()).toSecondOfDay().toLong() }.getOrNull()
+        if (from == null || to == null) return@mapNotNull null
+        from to (if (to < from) 24 * 3600L else to) // crossed midnight: end of day
+    }
+
+    fun extend(text: String, startTime: String, endTime: String): String {
+        val sessions = parse(text).toMutableList()
+        val from = runCatching { java.time.LocalTime.parse(startTime).toSecondOfDay().toLong() }.getOrNull() ?: return text
+        val to = runCatching { java.time.LocalTime.parse(endTime).toSecondOfDay().toLong() }.getOrNull() ?: return text
+        if (to <= from) return text
+        val last = sessions.lastOrNull()
+        if (last != null && from <= last.second + CONTINUE_SECONDS && from >= last.first) {
+            sessions[sessions.size - 1] = last.first to maxOf(last.second, to)
+        } else {
+            sessions += from to to
+        }
+        return sessions.joinToString(";") { "${format(it.first)}-${format(it.second)}" }
+    }
+
+    private fun format(seconds: Long): String {
+        val s = seconds.coerceIn(0, 24 * 3600L - 1)
+        return "%02d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60)
     }
 }

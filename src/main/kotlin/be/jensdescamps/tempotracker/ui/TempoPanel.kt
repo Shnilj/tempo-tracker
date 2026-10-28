@@ -86,7 +86,8 @@ class TempoPanel(private val project: Project, parent: Disposable) : SimpleToolW
         selectedId?.let { model.indexOf(it) }?.takeIf { it >= 0 }?.let { table.selectionModel.setSelectionInterval(it, it) }
 
         val tracked = entries.sumOf { it.trackedSeconds }
-        val toLog = entries.sumOf { LogPolicy.secondsToLog(it, settings) }
+        val plan = LogPolicy.plan(entries, settings)
+        val toLog = entries.sumOf { LogPolicy.plannedSeconds(it, settings, plan[it.id]) }
         val inTempo = tempoTotal?.let { " · in Tempo ${Durations.format(it)}" }.orEmpty()
         header.text = "<html><b>${date.format(DAY_FORMAT)}</b>&nbsp;&nbsp;tracked ${Durations.format(tracked)} · " +
             "to log ${Durations.format(toLog)}$inTempo</html>"
@@ -191,7 +192,7 @@ class TempoPanel(private val project: Project, parent: Disposable) : SimpleToolW
         val plan = LogPolicy.plan(TimeStore.getInstance().entries(day), settings)
         val lines = pending.joinToString("\n") {
             val action = LogPolicy.pendingAction(it, settings, plan[it.id])
-            val seconds = LogPolicy.secondsToLog(it, settings)
+            val seconds = LogPolicy.plannedSeconds(it, settings, plan[it.id])
             val from = if (seconds > 0) " at ${LogPolicy.timeRange(plan[it.id])}" else ""
             "• ${it.ticket}: ${Durations.format(seconds)}$from (${action.label})"
         }

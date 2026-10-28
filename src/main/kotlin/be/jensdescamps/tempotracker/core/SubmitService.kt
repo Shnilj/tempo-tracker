@@ -81,7 +81,8 @@ class SubmitService {
             try {
                 val existingIds = (listOf(entry.worklogId) + entry.extraWorklogIds.split(',').mapNotNull { it.trim().toLongOrNull() })
                     .filter { it != 0L }
-                if (LogPolicy.pendingAction(entry, settings) == LogPolicy.Action.DELETE) {
+                val planned = plans[entry.date]?.get(entry.id)
+                if (LogPolicy.pendingAction(entry, settings, planned) == LogPolicy.Action.DELETE) {
                     existingIds.forEach { tempo.delete(it) }
                     store.update(entry.id) {
                         it.worklogId = 0
@@ -97,9 +98,9 @@ class SubmitService {
                 }
                 val issue = jira.issue(entry.ticket)
                 val withSummary = entry.copy(summary = issue.summary)
-                val seconds = LogPolicy.secondsToLog(withSummary, settings)
+                val seconds = LogPolicy.plannedSeconds(withSummary, settings, planned)
                 val description = LogPolicy.description(withSummary, settings)
-                val segments = (plans[entry.date]?.get(entry.id) ?: LogPolicy.defaultSegments(withSummary, settings))
+                val segments = (planned ?: LogPolicy.defaultSegments(withSummary, settings))
                     .filter { it.seconds > 0 }
                     .ifEmpty { LogPolicy.defaultSegments(withSummary, settings) }
 
@@ -214,7 +215,8 @@ class SubmitService {
         val pending = pending(listOf(today)).filter { it.ticket.isNotBlank() }
         if (pending.isEmpty()) return
         val settings = TempoSettings.getInstance().state
-        val total = pending.sumOf { LogPolicy.secondsToLog(it, settings) }
+        val plan = LogPolicy.plan(TimeStore.getInstance().entries(today), settings)
+        val total = pending.sumOf { LogPolicy.plannedSeconds(it, settings, plan[it.id]) }
         notify(
             project,
             "${Durations.format(total)} on ${pending.size} ticket(s) isn't in Tempo yet.",

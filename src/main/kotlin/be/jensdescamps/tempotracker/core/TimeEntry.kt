@@ -34,5 +34,7 @@ data class TimeEntry(
     var ritualId: String = "",
     /** Fixed worklog start (HH:mm:ss) for rituals; empty = planned from activity. */
     var fixedStart: String = "",
+    /** Actual work sessions, "HH:mm:ss-HH:mm:ss;…" (used by the real-timeline layout). */
+    var sessions: String = "",
     var lastError: String = "",
 )

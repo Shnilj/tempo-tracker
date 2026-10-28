@@ -46,4 +46,16 @@ object Durations {
 
     /** Parses a clock time such as "17:30" or "9:00". */
     fun parseClock(text: String): LocalTime? = runCatching { LocalTime.parse(text.trim(), CLOCK) }.getOrNull()
+
+    /**
+     * Rounds a clock time to the nearest multiple of [stepMinutes]: 8:33 → 8:30, 8:38 → 8:45.
+     * Never rolls over to the next day (23:55 → 23:45). stepMinutes <= 0 only drops the nanos.
+     */
+    fun roundClock(time: LocalTime, stepMinutes: Int): LocalTime {
+        if (stepMinutes <= 0) return time.withNano(0)
+        val step = stepMinutes * 60
+        var rounded = ((time.toSecondOfDay() + step / 2) / step) * step
+        if (rounded >= 24 * 3600) rounded -= step
+        return LocalTime.ofSecondOfDay(rounded.toLong())
+    }
 }

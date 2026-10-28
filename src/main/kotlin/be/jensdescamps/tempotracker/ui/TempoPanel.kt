@@ -183,9 +183,12 @@ class TempoPanel(private val project: Project, parent: Disposable) : SimpleToolW
             SubmitService.notify(project, "Nothing to submit for $day.", NotificationType.INFORMATION)
             return
         }
+        val plan = LogPolicy.plan(TimeStore.getInstance().entries(day), settings)
         val lines = pending.joinToString("\n") {
-            val action = LogPolicy.pendingAction(it, settings)
-            "• ${it.ticket}: ${Durations.format(LogPolicy.secondsToLog(it, settings))} (${action.label})"
+            val action = LogPolicy.pendingAction(it, settings, plan[it.id])
+            val seconds = LogPolicy.secondsToLog(it, settings)
+            val from = if (seconds > 0) " from ${plan[it.id].orEmpty().take(5)}" else ""
+            "• ${it.ticket}: ${Durations.format(seconds)}$from (${action.label})"
         }
         val ok = Messages.showOkCancelDialog(
             project, "Send to Tempo for $day:\n\n$lines", "Submit to Tempo", "Submit", "Cancel", null,

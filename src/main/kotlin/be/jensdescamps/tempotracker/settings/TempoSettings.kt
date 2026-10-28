@@ -36,6 +36,8 @@ class TempoSettings : PersistentStateComponent<TempoSettings.State> {
         /** Reminder time (manual mode) or auto-submit time (daily mode), H:mm. */
         var dailyTime: String = "17:00"
         var descriptionTemplate: String = "Working on issue {key}"
+        /** Place a day's worklogs one after another instead of each at its own first activity. */
+        var backToBack: Boolean = false
     }
 
     private var myState = State()

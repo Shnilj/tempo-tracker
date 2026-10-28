@@ -25,5 +25,6 @@ data class TimeEntry(
     var worklogId: Long = 0,
     var submittedSeconds: Long = 0,
     var submittedDescription: String = "",
+    var submittedStartTime: String = "",
     var lastError: String = "",
 )

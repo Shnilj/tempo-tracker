@@ -59,4 +59,14 @@ class DurationsTest {
         assertEquals("2h", Durations.format(7200))
         assertEquals("<1m", Durations.format(20))
     }
+
+    @Test
+    fun roundsClockToNearestQuarter() {
+        fun r(h: Int, m: Int) = Durations.roundClock(java.time.LocalTime.of(h, m), 15).toString()
+        assertEquals("08:30", r(8, 33))
+        assertEquals("17:30", r(17, 27))
+        assertEquals("08:45", r(8, 38))
+        assertEquals("09:00", r(9, 0))
+        assertEquals("23:45", r(23, 55))
+    }
 }

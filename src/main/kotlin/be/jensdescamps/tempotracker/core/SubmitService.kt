@@ -53,7 +53,11 @@ class SubmitService {
     fun pending(dates: Collection<LocalDate>): List<TimeEntry> {
         val settings = TempoSettings.getInstance().state
         val store = TimeStore.getInstance()
-        return dates.flatMap { store.entries(it) }.filter { LogPolicy.pendingAction(it, settings) != LogPolicy.Action.NONE }
+        return dates.flatMap { date ->
+            val day = store.entries(date)
+            val plan = LogPolicy.plan(day, settings)
+            day.filter { LogPolicy.pendingAction(it, settings, plan[it.id]) != LogPolicy.Action.NONE }
+        }
     }
 
     /** Creates, updates or deletes Tempo worklogs so they match the local entries of [dates]. */
@@ -68,6 +72,7 @@ class SubmitService {
         val jira = JiraService.getInstance()
         val tempo = TempoClient(TempoSecrets.tempoToken)
         val me = jira.myself()
+        val plans = dates.associate { it.toString() to LogPolicy.plan(store.entries(it), settings) }
 
         todo.forEachIndexed { index, entry ->
             indicator?.checkCanceled()
@@ -80,6 +85,7 @@ class SubmitService {
                         it.worklogId = 0
                         it.submittedSeconds = 0
                         it.submittedDescription = ""
+                        it.submittedStartTime = ""
                         it.lastError = ""
                     }
                     result.deleted++
@@ -89,12 +95,13 @@ class SubmitService {
                 val withSummary = entry.copy(summary = issue.summary)
                 val seconds = LogPolicy.secondsToLog(withSummary, settings)
                 val description = LogPolicy.description(withSummary, settings)
+                val start = plans[entry.date]?.get(entry.id) ?: LogPolicy.startTime(entry, settings)
                 val payload = WorklogPayload(
                     issueId = issue.id,
                     authorAccountId = me.accountId,
                     timeSpentSeconds = seconds,
                     startDate = entry.date,
-                    startTime = entry.startTime.ifBlank { "09:00:00" },
+                    startTime = start,
                     description = description,
                 )
                 val worklogId = if (entry.worklogId != 0L) {
@@ -112,6 +119,7 @@ class SubmitService {
                     it.worklogId = worklogId
                     it.submittedSeconds = seconds
                     it.submittedDescription = description
+                    it.submittedStartTime = start
                     it.lastError = ""
                 }
             } catch (e: ProcessCanceledException) {

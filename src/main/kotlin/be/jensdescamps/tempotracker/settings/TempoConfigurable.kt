@@ -107,6 +107,11 @@ class TempoConfigurable : BoundConfigurable("Tempo Tracker") {
                     textField().bindText(s::descriptionTemplate).columns(COLUMNS_LARGE)
                         .comment("Placeholders: {key}, {summary}")
                 }
+                row {
+                    checkBox("Place each day's worklogs back to back").bindSelected(s::backToBack)
+                        .comment("The day starts at your first activity (rounded), then each ticket follows the previous one, " +
+                            "in the order you first worked on them. Off: each worklog starts at your first activity on that ticket.")
+                }
                 row("Submitting:") {
                     comboBox(SubmitMode.entries).bindItem(::mode)
                 }

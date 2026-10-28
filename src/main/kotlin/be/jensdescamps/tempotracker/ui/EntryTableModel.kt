@@ -12,10 +12,12 @@ import javax.swing.table.AbstractTableModel
 class EntryTableModel : AbstractTableModel() {
     private var entries: List<TimeEntry> = emptyList()
     private var settings = TempoSettings.State()
+    private var plan: Map<String, String> = emptyMap()
 
     fun setEntries(list: List<TimeEntry>, settings: TempoSettings.State) {
         entries = list
         this.settings = settings
+        plan = LogPolicy.plan(list, settings)
         fireTableDataChanged()
     }
 
@@ -50,8 +52,9 @@ class EntryTableModel : AbstractTableModel() {
             TRACKED -> Durations.format(e.trackedSeconds)
             TO_LOG -> Durations.format(LogPolicy.secondsToLog(e.copy(excluded = false), settings)) +
                 if (e.overrideSeconds >= 0) " ✎" else ""
+            TIME -> timeRange(e)
             DESCRIPTION -> if (e.ticket.isBlank()) "" else LogPolicy.description(e, settings)
-            else -> LogPolicy.status(e, settings)
+            else -> LogPolicy.status(e, settings, plan[e.id])
         }
     }
 
@@ -83,8 +86,16 @@ class EntryTableModel : AbstractTableModel() {
         }
     }
 
+    /** "08:30–09:45" for entries that will be logged. */
+    private fun timeRange(e: TimeEntry): String {
+        val seconds = LogPolicy.secondsToLog(e, settings)
+        val start = plan[e.id]?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
+        if (seconds <= 0 || start == null) return ""
+        return "${start.toString().take(5)}–${start.plusSeconds(seconds).toString().take(5)}"
+    }
+
     fun applyColumnWidths(table: JTable) {
-        val widths = intArrayOf(36, 140, 220, 70, 80, 220, 130)
+        val widths = intArrayOf(36, 140, 220, 70, 80, 100, 220, 130)
         widths.forEachIndexed { i, w -> table.columnModel.getColumn(i).preferredWidth = JBUI.scale(w) }
         table.columnModel.getColumn(LOG).maxWidth = JBUI.scale(44)
     }
@@ -95,9 +106,10 @@ class EntryTableModel : AbstractTableModel() {
         const val SUMMARY = 2
         const val TRACKED = 3
         const val TO_LOG = 4
-        const val DESCRIPTION = 5
-        const val STATUS = 6
-        private val COLUMNS = arrayOf("Log", "Ticket", "Summary", "Tracked", "To log", "Description", "Status")
+        const val TIME = 5
+        const val DESCRIPTION = 6
+        const val STATUS = 7
+        private val COLUMNS = arrayOf("Log", "Ticket", "Summary", "Tracked", "To log", "Time", "Description", "Status")
         const val NO_TICKET = "(no ticket)"
     }
 }

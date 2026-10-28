@@ -98,6 +98,7 @@ class TempoPanel(private val project: Project, parent: Disposable) : SimpleToolW
         val info = BranchResolver.resolve(project)
         return when {
             tracker.isPaused -> "⏸ Tracking paused"
+            tracker.currentRitual != null -> "◷ ${tracker.currentRitual}: IDE time isn't counted"
             info.branch == null -> "No Git branch detected"
             info.ticket == null -> "Branch ${info.branch} has no ticket: Tools → Tempo Tracker → Assign Jira Ticket"
             tracker.isTrackingProject(project) -> "● Tracking ${info.ticket}"
@@ -148,6 +149,10 @@ class TempoPanel(private val project: Project, parent: Disposable) : SimpleToolW
     private fun removeSelected() {
         val entry = model.entryAt(table.selectedRow) ?: return
         val store = TimeStore.getInstance()
+        if (entry.ritualId.isNotEmpty() && entry.worklogId == 0L) {
+            store.update(entry.id) { it.excluded = true } // keep the row so the meeting isn't re-added
+            return
+        }
         if (entry.worklogId == 0L) {
             store.remove(entry.id)
             return
@@ -187,7 +192,7 @@ class TempoPanel(private val project: Project, parent: Disposable) : SimpleToolW
         val lines = pending.joinToString("\n") {
             val action = LogPolicy.pendingAction(it, settings, plan[it.id])
             val seconds = LogPolicy.secondsToLog(it, settings)
-            val from = if (seconds > 0) " from ${plan[it.id].orEmpty().take(5)}" else ""
+            val from = if (seconds > 0) " at ${LogPolicy.timeRange(plan[it.id])}" else ""
             "• ${it.ticket}: ${Durations.format(seconds)}$from (${action.label})"
         }
         val ok = Messages.showOkCancelDialog(

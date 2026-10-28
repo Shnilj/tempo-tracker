@@ -1,5 +1,6 @@
 package be.jensdescamps.tempotracker.core
 
+import be.jensdescamps.tempotracker.settings.Ritual
 import be.jensdescamps.tempotracker.settings.TempoSettings
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
@@ -76,7 +77,7 @@ class TimeStore : PersistentStateComponent<TimeStore.State> {
 
     fun credit(date: LocalDate, ticket: String, seconds: Long, startTime: String) = write {
         val d = date.toString()
-        val entry = data.entries.firstOrNull { it.date == d && it.ticket == ticket }
+        val entry = data.entries.firstOrNull { it.date == d && it.ticket == ticket && it.ritualId.isEmpty() }
             ?: TimeEntry(date = d, ticket = ticket, startTime = startTime).also { data.entries.add(it) }
         entry.trackedSeconds += seconds
     }
@@ -85,7 +86,7 @@ class TimeStore : PersistentStateComponent<TimeStore.State> {
     fun addManual(date: LocalDate, ticket: String, seconds: Long) = write {
         val settings = TempoSettings.getInstance().state
         val d = date.toString()
-        val existing = data.entries.firstOrNull { it.date == d && it.ticket == ticket }
+        val existing = data.entries.firstOrNull { it.date == d && it.ticket == ticket && it.ritualId.isEmpty() }
         if (existing != null) {
             existing.overrideSeconds = LogPolicy.secondsToLog(existing.copy(excluded = false), settings) + seconds
             existing.excluded = false
@@ -105,7 +106,15 @@ class TimeStore : PersistentStateComponent<TimeStore.State> {
         val settings = TempoSettings.getInstance().state
         val entry = data.entries.firstOrNull { it.id == id } ?: return@write
         if (entry.worklogId != 0L || entry.ticket == newTicket) return@write
-        val target = data.entries.firstOrNull { it !== entry && it.date == entry.date && it.ticket == newTicket }
+        if (entry.ritualId.isNotEmpty()) { // rituals keep their own row
+            entry.ticket = newTicket
+            entry.summary = ""
+            entry.lastError = ""
+            return@write
+        }
+        val target = data.entries.firstOrNull {
+            it !== entry && it.date == entry.date && it.ticket == newTicket && it.ritualId.isEmpty()
+        }
         if (target == null) {
             entry.ticket = newTicket
             entry.summary = ""
@@ -122,6 +131,46 @@ class TimeStore : PersistentStateComponent<TimeStore.State> {
             target.startTime = entry.startTime
         }
         data.entries.remove(entry)
+    }
+
+    /** True once you've worked on [date] (rituals alone don't count). */
+    fun hasActivity(date: LocalDate): Boolean = synchronized(lock) {
+        val d = date.toString()
+        data.entries.any { it.date == d && it.ritualId.isEmpty() && it.trackedSeconds > 0 }
+    }
+
+    /** True if the ritual's row for [date] was unticked (meeting cancelled). */
+    fun isRitualSkipped(date: LocalDate, ritualId: String): Boolean = synchronized(lock) {
+        val d = date.toString()
+        data.entries.any { it.date == d && it.ritualId == ritualId && it.excluded }
+    }
+
+    /**
+     * Adds a fixed-time row for every ritual on [date] that doesn't have one yet. Rows are never
+     * deleted (only unticked), so a cancelled meeting doesn't come back.
+     */
+    fun ensureRituals(date: LocalDate, rituals: List<Ritual>) {
+        val d = date.toString()
+        val due = rituals.filter { it.appliesOn(date) }
+        val missing = synchronized(lock) { due.filter { r -> data.entries.none { it.date == d && it.ritualId == r.id } } }
+        if (missing.isEmpty()) return
+        write {
+            for (r in missing) {
+                if (data.entries.any { it.date == d && it.ritualId == r.id }) continue
+                val start = r.startTime()?.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) ?: continue
+                data.entries.add(
+                    TimeEntry(
+                        date = d,
+                        ticket = r.ticket.trim().uppercase(),
+                        ritualId = r.id,
+                        fixedStart = start,
+                        startTime = start,
+                        overrideSeconds = r.minutes * 60L,
+                        description = r.name.trim(),
+                    ),
+                )
+            }
+        }
     }
 
     fun assignTicket(branch: String, ticket: String?) = write {

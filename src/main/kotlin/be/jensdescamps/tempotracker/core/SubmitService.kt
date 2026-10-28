@@ -79,13 +79,17 @@ class SubmitService {
             indicator?.fraction = index.toDouble() / todo.size
             indicator?.text = "Logging ${entry.ticket} (${entry.date})"
             try {
+                val existingIds = (listOf(entry.worklogId) + entry.extraWorklogIds.split(',').mapNotNull { it.trim().toLongOrNull() })
+                    .filter { it != 0L }
                 if (LogPolicy.pendingAction(entry, settings) == LogPolicy.Action.DELETE) {
-                    tempo.delete(entry.worklogId)
+                    existingIds.forEach { tempo.delete(it) }
                     store.update(entry.id) {
                         it.worklogId = 0
+                        it.extraWorklogIds = ""
                         it.submittedSeconds = 0
                         it.submittedDescription = ""
                         it.submittedStartTime = ""
+                        it.submittedPlan = ""
                         it.lastError = ""
                     }
                     result.deleted++
@@ -95,31 +99,56 @@ class SubmitService {
                 val withSummary = entry.copy(summary = issue.summary)
                 val seconds = LogPolicy.secondsToLog(withSummary, settings)
                 val description = LogPolicy.description(withSummary, settings)
-                val start = plans[entry.date]?.get(entry.id) ?: LogPolicy.startTime(entry, settings)
-                val payload = WorklogPayload(
-                    issueId = issue.id,
-                    authorAccountId = me.accountId,
-                    timeSpentSeconds = seconds,
-                    startDate = entry.date,
-                    startTime = start,
-                    description = description,
-                )
-                val worklogId = if (entry.worklogId != 0L) {
-                    try {
-                        tempo.update(entry.worklogId, payload).also { result.updated++ }
-                    } catch (e: ApiException) {
-                        if (e.status != 404) throw e
-                        tempo.create(payload).also { result.created++ } // deleted in Tempo meanwhile
+                val segments = (plans[entry.date]?.get(entry.id) ?: LogPolicy.defaultSegments(withSummary, settings))
+                    .filter { it.seconds > 0 }
+                    .ifEmpty { LogPolicy.defaultSegments(withSummary, settings) }
+
+                // One worklog per segment: reuse existing ids in order, create extra ones, delete leftovers.
+                val ids = mutableListOf<Long>()
+                try {
+                    segments.forEachIndexed { i, segment ->
+                        val payload = WorklogPayload(
+                            issueId = issue.id,
+                            authorAccountId = me.accountId,
+                            timeSpentSeconds = segment.seconds,
+                            startDate = entry.date,
+                            startTime = segment.startText,
+                            description = description,
+                        )
+                        val old = existingIds.getOrNull(i)
+                        ids += if (old == null) {
+                            tempo.create(payload)
+                        } else {
+                            try {
+                                tempo.update(old, payload)
+                            } catch (e: ApiException) {
+                                if (e.status != 404) throw e
+                                tempo.create(payload) // deleted in Tempo meanwhile
+                            }
+                        }
                     }
-                } else {
-                    tempo.create(payload).also { result.created++ }
+                    existingIds.drop(segments.size).forEach { tempo.delete(it) }
+                } catch (e: Exception) {
+                    // Remember what exists now, so a retry updates instead of duplicating.
+                    val known = ids + existingIds.drop(ids.size)
+                    if (known.isNotEmpty()) {
+                        store.update(entry.id) {
+                            it.worklogId = known.first()
+                            it.extraWorklogIds = known.drop(1).joinToString(",")
+                            it.submittedPlan = "partial"
+                        }
+                    }
+                    throw e
                 }
+                if (entry.worklogId == 0L) result.created++ else result.updated++
                 store.update(entry.id) {
                     it.summary = issue.summary
-                    it.worklogId = worklogId
+                    it.worklogId = ids.first()
+                    it.extraWorklogIds = ids.drop(1).joinToString(",")
                     it.submittedSeconds = seconds
                     it.submittedDescription = description
-                    it.submittedStartTime = start
+                    it.submittedStartTime = segments.first().startText
+                    it.submittedPlan = LogPolicy.key(segments)
                     it.lastError = ""
                 }
             } catch (e: ProcessCanceledException) {

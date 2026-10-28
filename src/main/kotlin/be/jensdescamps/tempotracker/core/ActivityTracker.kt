@@ -1,5 +1,6 @@
 package be.jensdescamps.tempotracker.core
 
+import be.jensdescamps.tempotracker.settings.Rituals
 import be.jensdescamps.tempotracker.settings.TempoSettings
 import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.Disposable
@@ -44,6 +45,11 @@ class ActivityTracker : Disposable {
 
     @Volatile
     var isPaused = false
+        private set
+
+    /** Name of the ritual (meeting) running right now; IDE time isn't counted meanwhile. */
+    @Volatile
+    var currentRitual: String? = null
         private set
 
     fun start() {
@@ -106,14 +112,21 @@ class ActivityTracker : Disposable {
         lastTickMs = now
         val settings = TempoSettings.getInstance().state
 
-        // 1. Credit the interval that just ended. Skip huge gaps (laptop asleep).
+        val store = TimeStore.getInstance()
+        val today = LocalDate.now()
+        val ritual = Rituals.activeAt(today, LocalTime.now(), settings.rituals)
+            ?.takeUnless { store.isRitualSkipped(today, it.id) }
+        currentRitual = ritual?.name
+
+        // 1. Credit the interval that just ended. Skip huge gaps (laptop asleep) and meetings.
         val previous = attribution
-        if (tracking && previous != null && elapsedMs in 1..(TICK_SECONDS * 3_000)) {
+        if (tracking && ritual == null && previous != null && elapsedMs in 1..(TICK_SECONDS * 3_000)) {
             val key = previous.ticket ?: if (settings.trackUnassigned) "" else null
             if (key != null) {
                 val seconds = (elapsedMs + 500) / 1000
                 val start = LocalTime.now().minusSeconds(seconds).format(TIME_FORMAT)
-                TimeStore.getInstance().credit(LocalDate.now(), key, seconds, start)
+                store.credit(today, key, seconds, start)
+                store.ensureRituals(today, settings.rituals) // only on days you actually work
             }
         }
 

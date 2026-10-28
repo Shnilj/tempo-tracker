@@ -38,6 +38,7 @@ class TempoSettings : PersistentStateComponent<TempoSettings.State> {
         var descriptionTemplate: String = "Working on issue {key}"
         /** Place a day's worklogs one after another instead of each at its own first activity. */
         var backToBack: Boolean = false
+        var rituals: MutableList<Ritual> = mutableListOf()
     }
 
     private var myState = State()

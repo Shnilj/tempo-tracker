@@ -55,6 +55,7 @@ class TrackerStatusWidget(private val project: Project) : StatusBarWidget, Statu
             .firstOrNull { it.ticket == ticket }?.trackedSeconds ?: 0L
         val suffix = when {
             tracker.isPaused -> " (paused)"
+            tracker.currentRitual != null -> " (${tracker.currentRitual})"
             tracker.isTrackingProject(project) -> ""
             else -> " (idle)"
         }

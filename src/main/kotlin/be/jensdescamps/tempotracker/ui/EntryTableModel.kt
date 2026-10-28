@@ -12,7 +12,7 @@ import javax.swing.table.AbstractTableModel
 class EntryTableModel : AbstractTableModel() {
     private var entries: List<TimeEntry> = emptyList()
     private var settings = TempoSettings.State()
-    private var plan: Map<String, String> = emptyMap()
+    private var plan: Map<String, List<be.jensdescamps.tempotracker.core.Segment>> = emptyMap()
 
     fun setEntries(list: List<TimeEntry>, settings: TempoSettings.State) {
         entries = list
@@ -49,7 +49,7 @@ class EntryTableModel : AbstractTableModel() {
             LOG -> !e.excluded && e.ticket.isNotBlank()
             TICKET -> e.ticket.ifBlank { NO_TICKET }
             SUMMARY -> e.summary
-            TRACKED -> Durations.format(e.trackedSeconds)
+            TRACKED -> if (e.ritualId.isNotEmpty()) "meeting" else Durations.format(e.trackedSeconds)
             TO_LOG -> Durations.format(LogPolicy.secondsToLog(e.copy(excluded = false), settings)) +
                 if (e.overrideSeconds >= 0) " ✎" else ""
             TIME -> timeRange(e)
@@ -86,13 +86,9 @@ class EntryTableModel : AbstractTableModel() {
         }
     }
 
-    /** "08:30–09:45" for entries that will be logged. */
-    private fun timeRange(e: TimeEntry): String {
-        val seconds = LogPolicy.secondsToLog(e, settings)
-        val start = plan[e.id]?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
-        if (seconds <= 0 || start == null) return ""
-        return "${start.toString().take(5)}–${start.plusSeconds(seconds).toString().take(5)}"
-    }
+    /** "08:30–09:30, 09:45–10:15" for entries that will be logged. */
+    private fun timeRange(e: TimeEntry): String =
+        if (LogPolicy.secondsToLog(e, settings) <= 0) "" else LogPolicy.timeRange(plan[e.id])
 
     fun applyColumnWidths(table: JTable) {
         val widths = intArrayOf(36, 140, 220, 70, 80, 100, 220, 130)

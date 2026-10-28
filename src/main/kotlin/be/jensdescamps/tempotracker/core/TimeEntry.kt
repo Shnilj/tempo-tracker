@@ -26,5 +26,13 @@ data class TimeEntry(
     var submittedSeconds: Long = 0,
     var submittedDescription: String = "",
     var submittedStartTime: String = "",
+    /** Canonical "HH:mm:ss+seconds;…" of what was last sent to Tempo (see LogPolicy.key). */
+    var submittedPlan: String = "",
+    /** Worklog ids of the 2nd, 3rd… segment when an entry is split around rituals, comma-separated. */
+    var extraWorklogIds: String = "",
+    /** Set for entries created from a ritual. */
+    var ritualId: String = "",
+    /** Fixed worklog start (HH:mm:ss) for rituals; empty = planned from activity. */
+    var fixedStart: String = "",
     var lastError: String = "",
 )
